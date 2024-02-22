@@ -1,0 +1,216 @@
+{
+    "users": [
+        {
+            "id": 1234,
+            "name": "Hello world",
+            "periods": [
+                1,
+                2,
+                3,
+                4,
+                5,
+                6,
+                7
+            ],
+            "checkoffs": [
+                {
+                    "time": "",
+                    "projectNum": "",
+                    "authorized": ""
+                },
+                {
+                    "time": "11/27/2023, 19:46:20",
+                    "projectNum": "a",
+                    "authorized": "Yutaro"
+                },
+                {
+                    "time": "11/29/2023, 08:33:25",
+                    "projectNum": "Hello world",
+                    "authorized": "Yutaro"
+                }
+            ]
+        },
+        {
+            "id": 3609,
+            "name": "a",
+            "periods": [
+                5,
+                6
+            ],
+            "checkoffs": [
+                {
+                    "time": "",
+                    "projectNum": ""
+                },
+                {
+                    "time": "11/27/2023, 19:46:54",
+                    "projectNum": "a",
+                    "authorized": "Yutaro"
+                }
+            ]
+        },
+        {
+            "id": 8967,
+            "name": "b",
+            "periods": [
+                5,
+                6
+            ],
+            "checkoffs": [
+                {
+                    "time": "",
+                    "projectNum": ""
+                },
+                {
+                    "time": "11/27/2023, 19:46:59",
+                    "projectNum": "a",
+                    "authorized": "Yutaro"
+                }
+            ]
+        },
+        {
+            "id": 1336,
+            "name": "c",
+            "periods": [
+                5,
+                6
+            ],
+            "checkoffs": [
+                {
+                    "time": "",
+                    "projectNum": ""
+                }
+            ]
+        },
+        {
+            "id": 6770,
+            "name": "d",
+            "periods": [
+                5,
+                6
+            ],
+            "checkoffs": [
+                {
+                    "time": "",
+                    "projectNum": ""
+                },
+                {
+                    "time": "11/27/2023, 19:45:44",
+                    "projectNum": "a",
+                    "authorized": "Yutaro"
+                },
+                {
+                    "time": "11/27/2023, 19:46:07",
+                    "projectNum": "a",
+                    "authorized": "Yutaro"
+                }
+            ]
+        },
+        {
+            "id": 4247,
+            "name": "e",
+            "periods": [
+                5,
+                6
+            ],
+            "checkoffs": [
+                {
+                    "time": "",
+                    "projectNum": ""
+                }
+            ]
+        },
+        {
+            "id": 5280,
+            "name": "f",
+            "periods": [
+                5,
+                6
+            ],
+            "checkoffs": [
+                {
+                    "time": "",
+                    "projectNum": ""
+                }
+            ]
+        },
+        {
+            "id": 6679,
+            "name": "g",
+            "periods": [
+                5,
+                6
+            ],
+            "checkoffs": [
+                {
+                    "time": "",
+                    "projectNum": ""
+                }
+            ]
+        }
+    ],
+    "checkoffs": [
+        {
+            "name": "c",
+            "id": 1336,
+            "periods": [
+                5,
+                6
+            ],
+            "currentProject": "a"
+        },
+        {
+            "name": "b",
+            "id": 8967,
+            "periods": [
+                5,
+                6
+            ],
+            "currentProject": "a"
+        },
+        {
+            "name": "d",
+            "id": 6770,
+            "periods": [
+                5,
+                6
+            ],
+            "currentProject": "a"
+        },
+        {
+            "name": "Hello world",
+            "id": 1234,
+            "periods": [
+                1,
+                2,
+                3,
+                4,
+                5,
+                6,
+                7,
+                0
+            ],
+            "currentProject": "asdfasdf"
+        }
+    ],
+    "help": [
+        {
+            "name": "Hello world",
+            "id": 1234,
+            "periods": [
+                1,
+                2,
+                3,
+                4,
+                5,
+                6,
+                7
+            ],
+            "reason": "asdfadsf"
+        }
+    ],
+    "teachers": [
+        "Yutaro"
+    ],
+    "helpers": ["Yutaro"]
+}
