@@ -3,11 +3,27 @@ import gradio as gr
 import json
 import random
 import datetime
+import ngrok
+import argparse as ap
+from dotenv import load_dotenv
+import os
+
+parser = ap.ArgumentParser()
+parser.add_argument("-p","-production",action="store_true")
+
+load_dotenv()
+
+NGROK_KEY = os.getenv("NGROK_KEY")
+NGROK_DOMAIN = os.getenv("NGROK_DOMAIN")
 
 database = {}
 #select which database is going to be used. prod is the production database and should not be used for testing purposes
-DATABASE_DIRECTORY = "./testdb.json"
-#DATABASE_DIRECTORY = "./proddb.json"
+args = parser.parse_args()
+if args.production:
+    DATABASE_DIRECTORY = "./proddb.json"
+else:
+    DATABASE_DIRECTORY = "./testdb.json"
+
 
 #multiple registers at once blocked when true
 CHECKDOUBLEDIPPING = True
@@ -478,6 +494,12 @@ if __name__ == "__main__":
     loadDB()
     #enable queue (needed for auto-reload feature once implemented)
     #container.queue(concurrency_count=5, max_size=5)
+    #forward the port
+    listener = ngrok.forward(
+        addr="localhost:80",
+        authtoken = NGROK_KEY,
+        domain= NGROK_DOMAIN
+    )
     #launch the server on port 80, http
     container.launch(server_port=80,favicon_path="favicon.ico")
     
