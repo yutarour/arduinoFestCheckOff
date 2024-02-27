@@ -7,9 +7,24 @@ import ngrok
 import argparse as ap
 from dotenv import load_dotenv
 import os
+import logging
+
+###################################
+ARDUINOEND = datetime.datetime(2023,12,15,14,50)
+
+#if set to true will use ngrok's tunnels to publish the webpage
+NGROK_START = True
+
+#multiple registers at once blocked when true
+CHECKDOUBLEDIPPING = True
+
+#check for projects with the same name
+CHECKSAMEPROJECTNAME = True
+###################################
 
 parser = ap.ArgumentParser()
-parser.add_argument("-p","-production",action="store_true")
+parser.add_argument("-p","-production",type=bool)
+logging.basicConfig(level=logging.INFO)
 
 load_dotenv()
 
@@ -19,19 +34,12 @@ NGROK_DOMAIN = os.getenv("NGROK_DOMAIN")
 database = {}
 #select which database is going to be used. prod is the production database and should not be used for testing purposes
 args = parser.parse_args()
-if args.production:
+
+#if you include -p arg
+if args.p:
     DATABASE_DIRECTORY = "./proddb.json"
 else:
     DATABASE_DIRECTORY = "./testdb.json"
-
-
-#multiple registers at once blocked when true
-CHECKDOUBLEDIPPING = True
-
-CHECKHELPDOUBLEDIPPING = True
-
-#check for projects with the same name
-CHECKSAMEPROJECTNAME = True
 
 #saves the database
 def saveDB():
@@ -51,10 +59,8 @@ def findUser(id:int):
             return user
     return None
 
-#function to add people to the queue. if the type is project it is for project checkoff. 
-# if it is help it is for the help checkoff
-#in the case of help, the projectNum is the reason they need help
-def addCheckOff(id:str,projectNum:str,afterSchool:bool,typec:str="project"):
+#function to add people to the queue. 
+def addCheckOff(id:str,projectNum:str,afterSchool:bool):
     #check to see if the id is a number
     try:
         int(id)
@@ -67,22 +73,6 @@ def addCheckOff(id:str,projectNum:str,afterSchool:bool,typec:str="project"):
     
     #user exists
     else:
-        #special case for help
-        if typec == "help":
-            if CHECKHELPDOUBLEDIPPING:
-                for helpRequest in database["help"]:
-                    if helpRequest["id"] == user["id"]:
-                        return "### You are already in the queue. "
-            database["help"].append({
-                "name":user["name"],
-                "id":user["id"],
-                "periods":user["periods"],
-                "reason":projectNum
-            })
-
-            saveDB()
-            return "### You have been added!"
-        
         #check if user is already in queue
         if CHECKDOUBLEDIPPING:
             for queue in database["checkoffs"]:
@@ -104,14 +94,14 @@ def addCheckOff(id:str,projectNum:str,afterSchool:bool,typec:str="project"):
             "periods":user["periods"],
             "currentProject":projectNum
         })
-
-        
+        saveDB()
+        return "### You have been added!"
 
 #function to load the queue. Takes authentication that is checked against the database. 
 #the auth feature is not used, but it may be used in the auto-reloading queue system which takes more resources
 #than the usual auth therefore probably should be locked down
-#also loads the queue for the help as well based on if the key of the json
-def loadQueue(period:int,authent:str=None,key:str="checkoffs"):
+def loadQueue(period:int,authent:str=None):
+    
     try:
         int(period)
     except ValueError:
@@ -122,31 +112,30 @@ def loadQueue(period:int,authent:str=None,key:str="checkoffs"):
     if period == '':
         return "## Please select a period!"
     
-    if key == "checkoffs":
-        baseMarkDown = "# Current queue: \n"
-    if key == "help":
-        baseMarkDown = "# Help queue: \n"
+    baseMarkDown = "# Current queue: \n"
 
+    #insert the time left
+    duration = ARDUINOEND-datetime.datetime.now()
+
+    days, seconds = duration.days, duration.seconds
+    hours = days * 24 + seconds // 3600
+    minutes = (seconds % 3600) // 60
+
+    baseMarkDown+=f"### It is {datetime.datetime.now().strftime("%A, %B %d %Y, %H:%M:%S")}\n### You have {days} days, {hours} hours, and {minutes} minute(s) left!\n"
     if authent == None:
         counter = 1
-        for checkoff in database[key]:
+        for checkoff in database["checkoffs"]:
             #if the user is in the period the user asked for
             if int(period) in checkoff["periods"]:
-                if key == "checkoffs":
-                    baseMarkDown+= f"## {counter}. {checkoff['name']} | {checkoff['currentProject']}\n"
-                if key == "help":
-                    baseMarkDown+= f"## {counter}. {checkoff['name']} | {checkoff['reason']}\n"
+                baseMarkDown+= f"## {counter}. {checkoff['name']} | {checkoff['currentProject']}\n"
                 counter+=1
     
     elif authent in database["teachers"]:
         counter = 1
-        for checkoff in database[key]:
+        for checkoff in database["checkoffs"]:
             #if the user is in the period the user asked for
             if int(period) in checkoff["periods"]:
-                if key == "checkoffs":
-                    baseMarkDown+= f"## {counter}. {checkoff['name']} | {checkoff['currentProject']}\n"
-                if key == "help":
-                    baseMarkDown+= f"## {counter}. {checkoff['name']} | {checkoff['reason']}\n"
+                baseMarkDown+= f"## {counter}. {checkoff['name']} | {checkoff['currentProject']}\n"
                 counter+=1
     
     else:
@@ -233,73 +222,43 @@ def viewStudentInfo(teacherauth):
             basemd+=f"### - Name: {user['name']}, ID: {user['id']}, Periods: {user['periods']}\n"
         return basemd
     else:
-        print("Failed login attempt: "+teacherauth)
+        logging.info("Failed login attempt: "+teacherauth)
         return "# You are not authorized to view this information!"
 
 #function that is used by the teacher view to check students off. Takes the checkbox group and check students off and adds it to the log
-def checkOffUser(id:list,period:int,auth:str,typec:str = "checkoff"): 
+def checkOffUser(id:list,period:int,auth:str): 
     #id is list that looks like: [['0. c, Project: a', 1336], ['1. b, Project: a', 8967], ['2. d, Project: a', 6770]]
-    if typec == "checkoff":
-        if auth in database["teachers"]:
-            #user is authorized to check off
-            retMsg = ""
-            for ticked in id:
-                for index,checkoff in enumerate(database["checkoffs"]):
-                    #if the user is in the period the user asked for
-                    if int(period) in checkoff["periods"]:
-                        if ticked == checkoff["id"]:
-                            database["checkoffs"].pop(index)
-                            #add details to the userdb on when and what they finished
-                            for useridx,user in enumerate(database["users"]):
-                                if user["id"] == ticked:
-                                    #save the info in their user profile
-                                    database["users"][useridx]["checkoffs"].append({
-                                        "time":datetime.datetime.now().strftime("%m/%d/%Y, %H:%M:%S"),
-                                        "projectNum":checkoff["currentProject"],
-                                        "authorized":auth
-                                    })
-                                    retMsg+=f"### Checked off user {ticked} off\n"
-                                    print(f"{auth} has checked {ticked} off")
-                                    break   
-                                    #die after the first one
-            saveDB()
-            return {checkoffSubmitStatus:retMsg,checkoffOutput:checkBoxQueue(period,auth)[checkoffOutput]}
-        
-        else:
-            return {checkoffSubmitStatus:"# Not authorized",checkoffOutput:gr.CheckboxGroup(choices=None)}
+    if auth in database["teachers"]:
+        #user is authorized to check off
+        retMsg = ""
+        for ticked in id:
+            for index,checkoff in enumerate(database["checkoffs"]):
+                #if the user is in the period the user asked for
+                if int(period) in checkoff["periods"]:
+                    if ticked == checkoff["id"]:
+                        database["checkoffs"].pop(index)
+                        #add details to the userdb on when and what they finished
+                        for useridx,user in enumerate(database["users"]):
+                            if user["id"] == ticked:
+                                #save the info in their user profile
+                                database["users"][useridx]["checkoffs"].append({
+                                    "time":datetime.datetime.now().strftime("%m/%d/%Y, %H:%M:%S"),
+                                    "projectNum":checkoff["currentProject"],
+                                    "authorized":auth
+                                })
+                                retMsg+=f"### Checked off user {ticked} off\n"
+                                logging.info(f"{auth} has checked {ticked} off")
+                                break   
+                                #die after the first one
+        saveDB()
+        return {checkoffSubmitStatus:retMsg,checkoffOutput:checkBoxQueue(period,auth)[checkoffOutput]}
     
-    #get the checkoff panel for the help section
-    if typec == "help":
-        if auth in database["teachers"] or auth in database["helpers"]:
-            #user is authorized to check off
-            retMsg = ""
-            for ticked in id:
-                for index,helpRequest in enumerate(database["help"]):
-                    #if the user is in the period the user asked for
-                    if int(period) in helpRequest["periods"]:
-                        if ticked == helpRequest["id"]:
-                            database["help"].pop(index)
-                            #add details to the userdb on when and what they finished
-                            for useridx,user in enumerate(database["users"]):
-                                if user["id"] == ticked:
-                                    #save the info in their user profile
-                                    database["users"][useridx]["checkoffs"].append({
-                                        "time":datetime.datetime.now().strftime("%m/%d/%Y, %H:%M:%S"),
-                                        "reason":helpRequest["reason"],
-                                        "authorized":auth
-                                    })
-                                    retMsg+=f"### Checked off user {ticked} off\n"
-                                    print(f"{auth} has checked {ticked} off")
-                                    break   
-                                    #die after the first one
-            saveDB()
-            return {checkoffSubmitStatus:retMsg,checkoffOutput:checkBoxQueue(period,auth)[checkoffOutput]}
-                
-        else:
-            return {checkoffSubmitStatus:"# Not authorized",checkoffOutput:gr.CheckboxGroup(choices=None)}
+    else:
+        return {checkoffSubmitStatus:"# Not authorized",checkoffOutput:gr.CheckboxGroup(choices=None)}
+
 #new load with checkbox used specifically for the teacher checkoff feature
 #special function to handle the teacher check off queue display to be a checkbox
-def checkBoxQueue(period:str,teacherauth:str,typec:str = "checkoff"):
+def checkBoxQueue(period:str,teacherauth:str):
     if period == []:
         return {checkoffOutput:gr.CheckboxGroup(choices=None),checkoffSubmitStatus:"## Please select a period!"}
     if period == '':
@@ -307,39 +266,17 @@ def checkBoxQueue(period:str,teacherauth:str,typec:str = "checkoff"):
 
     choices = []
     counter = 1
-    if typec == "checkoff":
-        if teacherauth in database["teachers"]:
-            for checkoff in database["checkoffs"]:
-                #if the user is in the period the user asked for
-                if int(period) in checkoff["periods"]:
-                    choices.append((f"{counter}. {checkoff['name']}, Project: {checkoff['currentProject']}",checkoff["id"]))
-                    counter+=1
-        else:
-            return {checkoffOutput:gr.CheckboxGroup(choices=None),checkoffSubmitStatus:"# Not authorized"}
-    #special case for help as help has the key "reason" instead of currentProject
-    elif typec == "help":
-        print("Help run")
-        if teacherauth in database["teachers"] or teacherauth in database["helpers"]:
-            for helpRequest in database["help"]:
-                #if the user is in the period the user asked for
-                if int(period) in helpRequest["periods"]:
-                    choices.append((f"{counter}. {helpRequest['name']}, Reason: {helpRequest['reason']}",helpRequest["id"]))
-                    counter+=1
-            print("done loading help")
-        else:
-            print("Not authorized")
-            return {ghcheckoffOutput:gr.CheckboxGroup(choices=None),ghcheckoffSubmitStatus:"# Not authorized. You need either a teacher or a helper registeration!"}
-        
-    #returns to two components. the checkboxes, which get auto-updated with the choices and a status message (markdown)
-    return {ghcheckoffOutput:gr.CheckboxGroup(choices=choices),ghcheckoffSubmitStatus:"## Success"}
-
-def reloadDatabase(teacherauth:str):
     if teacherauth in database["teachers"]:
-        loadDB()
-        return "## Reloaded db"
+        for checkoff in database["checkoffs"]:
+            #if the user is in the period the user asked for
+            if int(period) in checkoff["periods"]:
+                choices.append((f"{counter}. {checkoff['name']}, Project: {checkoff['currentProject']}",checkoff["id"]))
+                counter+=1
     else:
-        return "# Not authorized"
-
+        return {checkoffOutput:gr.CheckboxGroup(choices=None),checkoffSubmitStatus:"# Not authorized"}
+    #returns to two components. the checkboxes, which get auto-updated with the choices and a status message (markdown)
+    return {checkoffOutput:gr.CheckboxGroup(choices=choices),checkoffSubmitStatus:"## Success"}
+gr.CheckboxGroup
 
 with gr.Blocks(title="ArduinoFest 2023 Sign offs",analytics_enabled=False) as container:
     gr.Markdown("## Arduinofest Signups")
@@ -363,32 +300,11 @@ with gr.Blocks(title="ArduinoFest 2023 Sign offs",analytics_enabled=False) as co
 
     removesubmit.click(removeUserFromQueue,inputs=removeid,outputs=removeStatus)
 
-    #the getting help tab
-    with gr.Tab("Get help"):
-        ghidnum = gr.Textbox(label="Enter ID number here")
-        ghreason = gr.Textbox(label="Enter project, what you need help on")
-        ghafterSchool = gr.Checkbox(label="Check if After school or Before school")
-        ghidsubmit = gr.Button("Submit")
-
-        #submit the help request to the database
-        ghidsubmit.click(addCheckOff,inputs=[ghidnum,ghreason,ghafterSchool,gr.State("help")])
-
-        gr.Markdown("## Current Queue")
-        #display queue on the same page
-        ghqueueselect = gr.Dropdown([0,1,2,3,4,5,6,7],label="Period")
-        ghqueue = gr.Button("Search")
-        ghqueuestatus = gr.Markdown("### Please search")
-
-        #load the queue and submit the user at the same time
-        ghidsubmit.click(loadQueue,inputs = [ghqueueselect,gr.State(None),gr.State("help")], outputs = ghqueuestatus)
-        ghqueue.click(loadQueue,inputs = [ghqueueselect,gr.State(None),gr.State("help")], outputs = ghqueuestatus)
-        ghqueueselect.change(loadQueue,inputs = [ghqueueselect,gr.State(None),gr.State("help")], outputs = ghqueuestatus)
-
     #loads the student queue view. 0th is for before/after school
     with gr.Tab("View Queue"):
         queueselect = gr.Dropdown([0,1,2,3,4,5,6,7],label="Period")
         queue = gr.Button("Search")
-        queuestatus = gr.Markdown("### Please search")
+        queuestatus = gr.Markdown("### Please search",)
     
     queue.click(loadQueue,inputs = queueselect, outputs = queuestatus)
     queueselect.change(loadQueue,inputs = queueselect, outputs = queuestatus)
@@ -454,31 +370,6 @@ with gr.Blocks(title="ArduinoFest 2023 Sign offs",analytics_enabled=False) as co
             #when user clicks submit checkoffs
             checkoffSubmit.click(checkOffUser,inputs=[checkoffOutput,checkoffperiod,authent], outputs=[checkoffSubmitStatus,checkoffOutput])
 
-        #check off help requests
-        with gr.Tab("Resolve help requests"):
-            #show period selection box auto-reloads the queue when different period is selected
-            ghcheckoffperiod = gr.Dropdown([0,1,2,3,4,5,6,7],label="Period")
-            #manual queue load button
-            ghcheckoffLoadQueue = gr.Button("Load Queue")
-            
-            ghcheckoffSubmitStatus = gr.Markdown()
-            #checkoff target
-            #show queue, target checkoff boxes
-            ghcheckoffOutput = gr.CheckboxGroup(interactive=True,label="Check off students")
-            #submit check off button
-            ghcheckoffSubmit = gr.Button("Submit check offs")
-            
-            #when user changes the period, auto-reload the queue
-            ghcheckoffperiod.change(checkBoxQueue,inputs=[ghcheckoffperiod,authent,gr.State("help")],outputs=[ghcheckoffOutput,ghcheckoffSubmitStatus])
-            #when user clicks the load button, re-load the queue
-            ghcheckoffLoadQueue.click(checkBoxQueue,inputs=[ghcheckoffperiod,authent,gr.State("help")],outputs=[ghcheckoffOutput,ghcheckoffSubmitStatus])
-            #when user clicks submit checkoffs
-            ghcheckoffSubmit.click(checkOffUser,inputs=[ghcheckoffOutput,ghcheckoffperiod,authent,gr.State("help")], outputs=[ghcheckoffSubmitStatus,ghcheckoffOutput])
-
-        with gr.Tab("Reload Database"):
-            reloadButton = gr.Button("Reload database")
-            reloadOutput = gr.Markdown()
-            reloadButton.click(reloadDatabase,authent,reloadOutput)
         #TODO: Add auto-reload natively to the program to avoid the selenium based id-checking auto-reload system
         #with gr.Tab("AutoReload Queue") as aqr:
         #    autoqueueselect = gr.Dropdown([0,1,2,3,4,5,6,7],label="Period")
@@ -492,17 +383,23 @@ with gr.Blocks(title="ArduinoFest 2023 Sign offs",analytics_enabled=False) as co
 if __name__ == "__main__":
     #load persistent database to recover data
     loadDB()
+
+    if NGROK_START:
+        if NGROK_KEY == None or NGROK_DOMAIN == None:
+            print("You need key and a domain to host this site on a static domain!!! Make sure to add it to the .env file.")
+            quit()
+        listener = ngrok.forward(
+            addr="localhost:80",
+            authtoken = NGROK_KEY,
+            domain= NGROK_DOMAIN
+        )
     #enable queue (needed for auto-reload feature once implemented)
     #container.queue(concurrency_count=5, max_size=5)
-    #forward the port
-    listener = ngrok.forward(
-        addr="localhost:80",
-        authtoken = NGROK_KEY,
-        domain= NGROK_DOMAIN
-    )
     #launch the server on port 80, http
     container.launch(server_port=80,favicon_path="favicon.ico")
-    
+
+#Remarks: Hosted on a computer which has a tunnel via ngrok to a free-static domain from ngrok (domain remains static so that I can run code from a different computer and it still will work and have the same IP)
+#BTW: The URL was tinyurl'd in order to make it easier to type.
 
 #Remarks: Hosted on a computer which has a tunnel via ngrok to a free-static domain from ngrok (domain remains static so that I can run code from a different computer and it still will work and have the same IP)
 #BTW: The URL was tinyurl'd in order to make it easier to type.
